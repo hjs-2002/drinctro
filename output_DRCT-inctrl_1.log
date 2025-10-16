@@ -1,0 +1,60 @@
+nohup: 忽略输入
+Using gpus:0,batch size:256,gpu_count:1,num_classes:2
+No model found, initializing random model.
+real_root:/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/MSCOCO/train2017, real_rec_root:/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/images/stable-diffusion-inpainting/train2017
+fake_root:/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/images/stable-diffusion-v1-4/train2017, fake_rec_root:/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/fake_rec_images/stable-diffusion-v1-4/train2017
+Real data-train:106458.
+Real rec data-train:106458.
+Fake data-train:106458.
+Fake rec data-train:106458.
+Phase:train, real:106458, fake:106458,Total real:118287, fake:118287
+real_root:/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/MSCOCO/train2017, real_rec_root:/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/images/stable-diffusion-inpainting/train2017
+fake_root:/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/images/stable-diffusion-v1-4/train2017, fake_rec_root:/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/fake_rec_images/stable-diffusion-v1-4/train2017
+Real data-val:11829.
+Real rec data-val:11829.
+Fake data-val:11829.
+Fake rec data-val:11829.
+Phase:val, real:11829, fake:11829,Total real:118287, fake:118287
+train_dataset_len: 212916 eval_dataset_len: 23658
+  0%|          | 0/832 [00:00<?, ?it/s]  0%|          | 0/832 [00:06<?, ?it/s]
+Traceback (most recent call last):
+  File "train_contrastive.py", line 495, in <module>
+    train_model(model, criterion, optimizer,tokenizer, epoch, scaler=GradScaler() if args.is_amp else None, alpha=args.alpha)
+  File "train_contrastive.py", line 316, in train_model
+    for i, (input, types, label) in enumerate(training_process):
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/tqdm/std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 630, in __next__
+    data = self._next_data()
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 1345, in _next_data
+    return self._process_data(data)
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 1371, in _process_data
+    data.reraise()
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/_utils.py", line 694, in reraise
+    raise exception
+RuntimeError: Caught RuntimeError in DataLoader worker process 0.
+Original Traceback (most recent call last):
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/worker.py", line 308, in _worker_loop
+    data = fetcher.fetch(index)
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 54, in fetch
+    return self.collate_fn(data)
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 265, in default_collate
+    return collate(batch, collate_fn_map=default_collate_fn_map)
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 142, in collate
+    return [collate(samples, collate_fn_map=collate_fn_map) for samples in transposed]  # Backwards compatibility.
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 142, in <listcomp>
+    return [collate(samples, collate_fn_map=collate_fn_map) for samples in transposed]  # Backwards compatibility.
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 145, in collate
+    return elem_type([collate(samples, collate_fn_map=collate_fn_map) for samples in transposed])
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 145, in <listcomp>
+    return elem_type([collate(samples, collate_fn_map=collate_fn_map) for samples in transposed])
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 119, in collate
+    return collate_fn_map[elem_type](batch, collate_fn_map=collate_fn_map)
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 171, in collate_numpy_array_fn
+    return collate([torch.as_tensor(b) for b in batch], collate_fn_map=collate_fn_map)
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 119, in collate
+    return collate_fn_map[elem_type](batch, collate_fn_map=collate_fn_map)
+  File "/home/law/miniconda3/envs/drct/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 161, in collate_tensor_fn
+    out = elem.new(storage).resize_(len(batch), *list(elem.size()))
+RuntimeError: Trying to resize storage that is not resizable
+

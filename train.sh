@@ -1,0 +1,14 @@
+nohup python train_contrastive.py --root_path /home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/MSCOCO/train2017,/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/images/stable-diffusion-inpainting/train2017 \
+                            --fake_root_path /home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/images/stable-diffusion-v1-4/train2017,/home/law/Datasets/Dataset_hjs/Dataset_hjs/dataset_DRCT/fake_rec_images/stable-diffusion-v1-4/train2017 \
+                            --dataset_name DRCT-2M \
+                            --model_name InCTRL \
+                            --embedding_size 1024 \
+                            --input_size 224 \
+                            --batch_size 256 \
+                            --fake_indexes 2 \
+                            --num_epochs 17 \
+                            --device_id 0 \
+                            --lr 0.0001 \  --is_crop\
+                            --num_workers 12 \
+                            --save_flag \
+                            --is_amp  _drct_amp_crop > output_DRCT-inctrl_1.log 2>&1
