@@ -282,7 +282,9 @@ def get_models(model_name='tf_efficientnet_b3_ns', pretrained=True, num_classes=
 
     cast_dtype = get_cast_dtype('fp32')
     # 检查 embedding_size 是否有效，若有效则创建对比学习模型
-    if embedding_size is not None and isinstance(embedding_size, int) and embedding_size > 0:
+    # if embedding_size is not None and isinstance(embedding_size, int) and embedding_size > 0:
+    #     model = ContrastiveModels(model_name, num_classes, pretrained, embedding_size, freeze_extractor)
+    if embedding_size is not None and isinstance(embedding_size, int) and embedding_size < 0:
         model = ContrastiveModels(model_name, num_classes, pretrained, embedding_size, freeze_extractor)
     # 若模型名称包含 'efficientnet'，则创建 EfficientNet 系列模型
     elif 'efficientnet' in model_name:
@@ -995,7 +997,7 @@ class InCTRL(nn.Module):
             normal_image = image[1:]
             normal_image = torch.stack(normal_image)
             shot, b, _, _, _ = normal_image.shape
-            normal_image = normal_image.reshape(-1, 3, 240, 240).cuda(non_blocking=True)
+            normal_image = normal_image.reshape(-1, 3,224, 224).cuda(non_blocking=True)
         else:
             img = image[0].cuda(non_blocking=True)
             normal_image = normal_list
@@ -1004,7 +1006,7 @@ class InCTRL(nn.Module):
             b = len(img)
             normal_image = normal_image.repeat(1, b, 1, 1, 1)
             shot, _, _, _, _ = normal_image.shape
-            normal_image = normal_image.reshape(-1, 3, 240, 240).cuda(non_blocking=True)
+            normal_image = normal_image.reshape(-1, 3, 224, 224).cuda(non_blocking=True)
 
         # 编码图像特征
         token, Fp_list, Fp = self.encode_image(img, normalize=False)
