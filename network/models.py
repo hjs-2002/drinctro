@@ -286,6 +286,7 @@ def get_models(model_name='tf_efficientnet_b3_ns', pretrained=True, num_classes=
     #     model = ContrastiveModels(model_name, num_classes, pretrained, embedding_size, freeze_extractor)
     if embedding_size is not None and isinstance(embedding_size, int) and embedding_size < 0:
         model = ContrastiveModels(model_name, num_classes, pretrained, embedding_size, freeze_extractor)
+        print('Using the Contrastive Model: {}'.format(model_name))
     # 若模型名称包含 'efficientnet'，则创建 EfficientNet 系列模型
     elif 'efficientnet' in model_name:
         model = get_efficientnet_ns(model_name, pretrained, num_classes)
@@ -319,6 +320,7 @@ def get_models(model_name='tf_efficientnet_b3_ns', pretrained=True, num_classes=
     text_cfg=vitl14['text_cfg'],
     quick_gelu=False,
     cast_dtype=cast_dtype)
+        print('Using the InCTRL Model: {}'.format(model_name))
         
     else:
         raise NotImplementedError(model_name)
@@ -1007,11 +1009,14 @@ class InCTRL(nn.Module):
             normal_image = normal_image.repeat(1, b, 1, 1, 1)
             shot, _, _, _, _ = normal_image.shape
             normal_image = normal_image.reshape(-1, 3, 224, 224).cuda(non_blocking=True)
-
+        print(f'shot:{shot}, b:{b}, normal_image.shape:{normal_image.shape}')
+        print(f'img.shape:{img.shape}, normal_image.shape:{normal_image.shape}')
         # 编码图像特征
         token, Fp_list, Fp = self.encode_image(img, normalize=False)
         token_n, Fp_list_n, Fp_n = self.encode_image(normal_image, normalize=False)
-
+        # print(f'Fp_list.shape:{Fp_list.shape}, Fp_list_n.shape:{Fp_list_n.shape}')
+        # print(f'token.shape:{token.shape}, token_n.shape:{token_n.shape}')
+        # print(f'Fp.shape:{Fp.shape}, Fp_n.shape:{Fp_n.shape}')
         # 整理特征维度
         Fp_list = torch.stack(Fp_list)
         Fp_list_n = torch.stack(Fp_list_n)
@@ -1019,8 +1024,10 @@ class InCTRL(nn.Module):
         Fp_list = Fp_list[:, :, 1:, :]
         Fp_list_n = Fp_list_n[:, :, 1:, :]
 
-        Fp_list = Fp_list.reshape(b, 3, 225, -1)
-        Fp_list_n = Fp_list_n.reshape(b, 3, 225 * shot, -1)
+        # Fp_list = Fp_list.reshape(b, 3, 225, -1)
+        # Fp_list_n = Fp_list_n.reshape(b, 3, 225 * shot, -1)
+        Fp_list = Fp_list.reshape(b, 3, 256, -1)
+        Fp_list_n = Fp_list_n.reshape(b, 3, 256 * shot, -1)
 
         token_n = token_n.reshape(b, shot, -1)
 
