@@ -231,8 +231,9 @@ def eval_model(model, epoch, eval_loader, tokenizer, is_save=True, threshold=0.5
                 eval_process.set_description("Epoch: %d, Loss: %.4f, Acc: %.4f" %
                                              (epoch, losses.avg, accuracies.avg))
             # 将图像和标签数据移动到 GPU 上
-            img, label = img.cuda(), label.cuda()
-
+            # img, label = img.cuda(), label.cuda()
+            img = [i.cuda() for i in img] # 遍历列表，分别将每个张量移到GPU
+            label = label.cuda() # 标签张量也需要移动到GPU
             # 前向传播，获取模型的预测结果和嵌入向量
             # y_pred, embeddings = model(img, return_feature=True)
             y_pred, _ = model(tokenizer,img , type, None)
@@ -331,7 +332,10 @@ def train_model(model, criterion, optimizer,tokenizer, epoch, scaler=None, alpha
                     epoch, current_lr, losses.avg, accuracies.avg))
 
         # 将图像和标签数据移动到 GPU 上进行计算
-        input, types, label = input.cuda(), types.cuda(), label.cuda()
+        # input, types, label = input.cuda(), types.cuda(), label.cuda()
+        input = [i.cuda() for i in input] # 同样，遍历列表处理图像
+        # types 是一个字符串列表 (['real', 'fake', ...])，不需要也不能移动到GPU
+        label = label.cuda()
         # 前向传播：将输入数据 x 传入模型，得到预测结果和嵌入向量
         if scaler is None:
             # 不使用混合精度训练，直接进行前向传播
