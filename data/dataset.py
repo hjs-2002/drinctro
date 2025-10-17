@@ -713,9 +713,11 @@ class AIGCDetectionDataset(Dataset):
             image, is_success = read_image(image_path)
             rec_image, rec_is_success = read_image(rec_image_path)
             is_success = is_success and rec_is_success
-            image_list = list()
-            image_list.append(image)
-            image_list.append(rec_image)
+            print("image shape:", image.shape)
+            print("rec_image shape:", rec_image.shape)
+            # image_list = list()
+            # image_list.append(image)
+            # image_list.append(rec_image)
             
         else:
             image_path, rec_image_path = self.image_paths[index]
@@ -745,21 +747,27 @@ class AIGCDetectionDataset(Dataset):
             try:
                 if isinstance(self.transform, torchvision.transforms.transforms.Compose):
                     image = self.transform(Image.fromarray(image))
+                    rec_image = self.transform(Image.fromarray(rec_image))
                     print("transform success!!!")
                     print("image shape:", image.shape)
                 else:
                     data = self.transform(image=image)
                     image = data["image"]
+                    rec_data = self.transform(image=rec_image) # <--- 新增
+                    rec_image = rec_data["image"] # <--- 新增
             except:
                 print("transform error!!!")
                 image = np.zeros(shape=(512, 512, 3), dtype=np.uint8)
                 if isinstance(self.transform, torchvision.transforms.transforms.Compose):
                     image = self.transform(Image.fromarray(image))
+                    rec_image = self.transform(Image.fromarray(rec_image)) # <--- 新增
                 else:
                     data = self.transform(image=image)
                     image = data["image"]
+                    rec_data = self.transform(image=rec_image) # <--- 新增
+                    rec_image = rec_data["image"] # <--- 新增
                 label = 0
-
+        image_list = [image, rec_image]
         if not self.use_label:
             return image, image_path.replace(f"{self.root_path}", '')  # os.path.basename(image_path)
 
