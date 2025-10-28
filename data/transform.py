@@ -6,7 +6,8 @@ from albumentations.core.transforms_interface import ImageOnlyTransform
 from torchvision import transforms
 import torch
 import albumentations as A
-
+import math
+from PIL import Image
 current_work_dir = os.path.dirname(__file__)  # 当前文件所在的目录
 
 class SpectrumNormalize(ImageOnlyTransform):
@@ -89,6 +90,7 @@ def create_train_transforms(size=300, mean=(0.485, 0.456, 0.406), std=(0.229, 0.
         # 将图像转换为 PyTorch 张量
         ToTensorV2()
     ]
+    
     # 将上述增强操作组合起来，并为额外目标 'rec_image' 应用相同的变换
     return A.Compose(aug_hard, additional_targets={'rec_image': 'image'})
 
@@ -105,20 +107,181 @@ def create_val_transforms(size=300, mean=(0.485, 0.456, 0.406), std=(0.229, 0.22
     ], additional_targets={'rec_image': 'image'})
 
 
-def create_sdie_transforms(size=224, phase='train'):
+# def create_sdie_transforms(size=224, phase='train'):
+#     if phase == 'train':
+#         aug_list = [
+#             A.PadIfNeeded(min_height=size, min_width=size, border_mode=cv2.BORDER_CONSTANT, value=0),
+#             A.RandomCrop(height=size, width=size),
+#             # A.HorizontalFlip(p=0.2),
+#             # A.VerticalFlip(p=0.2),
+#             # A.RandomRotate90(p=0.2),
+#         ]
+#     else:
+#         aug_list = [
+#             A.PadIfNeeded(min_height=size, min_width=size, border_mode=cv2.BORDER_CONSTANT, value=0),
+#             A.CenterCrop(height=size, width=size)
+#         ]
+#     return A.Compose(aug_list, additional_targets={'rec_image': 'image'})
+
+# def translate_duplicate(img, cropSize):
+#     """
+#     将图像进行平移复制，以确保图像的最小维度不小于cropSize。
+    
+#     如果图像的最小维度（宽度或高度）小于cropSize，则在图像的右侧和下方重复粘贴原图像，
+#     直到新图像的宽度和高度都不小于cropSize。如果图像的最小维度不小于cropSize，则直接返回原图像。
+    
+#     参数:
+#     img (PIL.Image.Image): 输入的图像对象。
+#     cropSize (int): 期望的最小裁剪尺寸。
+    
+#     返回:
+#     PIL.Image.Image: 平移复制后的图像对象。
+#     """
+#     #打印当前路径
+#     # print("当前路径",os.getcwd())
+#     # files_and_dirs = os.listdir('.')
+#     # print("当前目录下的文件和目录:", files_and_dirs)
+#     # img.save(f"original_{len(os.listdir('.')) // 2 + 1}_image.jpg")
+#     # 检查图像的最小维度是否小于cropSize
+#     if min(img.size) < cropSize:
+#         # 获取原图像的宽度和高度
+#         width, height = img.size
+        
+#         # 计算新图像的宽度和高度，确保它们不小于cropSize
+#         new_width = width * math.ceil(cropSize/width)
+#         new_height = height * math.ceil(cropSize/height)
+        
+#         # 创建一个新的图像对象，尺寸为计算出的新宽度和新高度
+#         new_img = Image.new('RGB', (new_width, new_height))
+        
+#         # 在新图像上重复粘贴原图像
+#         for i in range(0, new_width, width):
+#             for j in range(0, new_height, height):
+#                 new_img.paste(img, (i, j))
+        
+#         # 返回平移复制后的新图像
+#         print(f"Image resized from {img.size} to {new_img.size} for cropping.")
+#         # new_img.save(f"translated_{len(os.listdir('.')) // 2 - 3}_image.jpg")
+#         # 保存平移复制后的新图像
+       
+#         return new_img
+#     else:
+#         # 如果原图像的最小维度不小于cropSize，直接返回原图像
+#         return img
+def translate_duplicate(img, cropSize):
+    """
+    将图像进行平移复制，以确保图像的最小维度不小于cropSize。
+    
+    如果图像的最小维度（宽度或高度）小于cropSize，则在图像的右侧和下方重复粘贴原图像，
+    直到新图像的宽度和高度都不小于cropSize。如果图像的最小维度不小于cropSize，则直接返回原图像。
+    
+    参数:
+    img (PIL.Image.Image or np.ndarray): 输入的图像对象。
+    cropSize (int): 期望的最小裁剪尺寸。
+    
+    返回:
+    PIL.Image.Image or np.ndarray: 平移复制后的图像对象。
+    """
+    # 检查输入是PIL图像还是numpy数组
+    if isinstance(img, np.ndarray):
+        # 处理numpy数组格式的图像 (height, width, channels)
+        height, width = img.shape[:2]
+        # 检查图像的最小维度是否小于cropSize
+        if min(width, height) < cropSize:
+            # 计算新图像的宽度和高度，确保它们不小于cropSize
+            new_width = width * math.ceil(cropSize/width)
+            new_height = height * math.ceil(cropSize/height)
+            
+            # 创建一个新的图像数组，尺寸为计算出的新宽度和新高度
+            if len(img.shape) == 3:
+                new_img = np.zeros((new_height, new_width, img.shape[2]), dtype=img.dtype)
+            else:
+                new_img = np.zeros((new_height, new_width), dtype=img.dtype)
+            
+            # 在新图像上重复粘贴原图像
+            for i in range(0, new_width, width):
+                for j in range(0, new_height, height):
+                    w_end = min(i + width, new_width)
+                    h_end = min(j + height, new_height)
+                    new_img[j:h_end, i:w_end] = img[0:h_end-j, 0:w_end-i]
+            
+            # 返回平移复制后的新图像
+            print(f"Image resized from ({width}, {height}) to ({new_width}, {new_height}) for cropping.")
+            return new_img
+        else:
+            # 如果原图像的最小维度不小于cropSize，直接返回原图像
+            return img
+    else:
+        # 处理PIL图像格式
+        # 检查图像的最小维度是否小于cropSize
+        if min(img.size) < cropSize:
+            # 获取原图像的宽度和高度
+            width, height = img.size
+            
+            # 计算新图像的宽度和高度，确保它们不小于cropSize
+            new_width = width * math.ceil(cropSize/width)
+            new_height = height * math.ceil(cropSize/height)
+            
+            # 创建一个新的图像对象，尺寸为计算出的新宽度和新高度
+            new_img = Image.new('RGB', (new_width, new_height))
+            
+            # 在新图像上重复粘贴原图像
+            for i in range(0, new_width, width):
+                for j in range(0, new_height, height):
+                    new_img.paste(img, (i, j))
+            
+            # 返回平移复制后的新图像
+            # print(f"Image resized from {img.size} to {new_img.size} for cropping.")
+            return new_img
+        else:
+            # 如果原图像的最小维度不小于cropSize，直接返回原图像
+            return img
+def create_sdie_transforms(size=224, phase='train', mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
     if phase == 'train':
         aug_list = [
             A.PadIfNeeded(min_height=size, min_width=size, border_mode=cv2.BORDER_CONSTANT, value=0),
+           
             A.RandomCrop(height=size, width=size),
             # A.HorizontalFlip(p=0.2),
             # A.VerticalFlip(p=0.2),
             # A.RandomRotate90(p=0.2),
+            A.Normalize(mean=mean, std=std),
+            ToTensorV2()
         ]
     else:
         aug_list = [
             A.PadIfNeeded(min_height=size, min_width=size, border_mode=cv2.BORDER_CONSTANT, value=0),
-            A.CenterCrop(height=size, width=size)
+            
+            A.CenterCrop(height=size, width=size),
+            A.Normalize(mean=mean, std=std),
+            ToTensorV2()
         ]
+    
+    return A.Compose(aug_list, additional_targets={'rec_image': 'image'})
+
+
+
+def create_sdie_transforms_dup(size=224, phase='train', mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+    if phase == 'train':
+        aug_list = [
+            # A.PadIfNeeded(min_height=size, min_width=size, border_mode=cv2.BORDER_CONSTANT, value=0),
+            A.Lambda(lambda x, **kwargs: translate_duplicate(x, 256), mask=None),
+            A.RandomCrop(height=size, width=size),
+            # A.HorizontalFlip(p=0.2),
+            # A.VerticalFlip(p=0.2),
+            # A.RandomRotate90(p=0.2),
+            A.Normalize(mean=mean, std=std),
+            ToTensorV2()
+        ]
+    else:
+        aug_list = [
+            # A.PadIfNeeded(min_height=size, min_width=size, border_mode=cv2.BORDER_CONSTANT, value=0),
+            A.Lambda(lambda x, **kwargs: translate_duplicate(x, 256), mask=None),
+            A.CenterCrop(height=size, width=size),
+            A.Normalize(mean=mean, std=std),
+            ToTensorV2()
+        ]
+    
     return A.Compose(aug_list, additional_targets={'rec_image': 'image'})
 
 
