@@ -913,6 +913,8 @@ class InCTRL(nn.Module):
             cast_dtype: Optional[torch.dtype] = None,
             output_dict: bool = False,
     ):
+        
+        self.total_steps = 0
         super().__init__()
         self.output_dict = output_dict
         # 构建视觉编码器
@@ -931,7 +933,8 @@ class InCTRL(nn.Module):
 
         # 添加适配器和差异头模块
         self.adapter = Adapter(768, 4)
-        self.diff_head = TransformerBasicHead(225, 1)
+        # self.diff_head = TransformerBasicHead(225, 1)
+        self.diff_head = TransformerBasicHead(256, 1)
         self.diff_head_ref = TransformerBasicHead(768, 1)
 
         # 冻结视觉和文本编码器的参数
@@ -1009,8 +1012,8 @@ class InCTRL(nn.Module):
             normal_image = normal_image.repeat(1, b, 1, 1, 1)
             shot, _, _, _, _ = normal_image.shape
             normal_image = normal_image.reshape(-1, 3, 224, 224).cuda(non_blocking=True)
-        print(f'shot:{shot}, b:{b}, normal_image.shape:{normal_image.shape}')
-        print(f'img.shape:{img.shape}, normal_image.shape:{normal_image.shape}')
+        # print(f'shot:{shot}, batch_size:{b}')
+        # print(f'img.shape:{img.shape}, normal_image.shape:{normal_image.shape}')
         # 编码图像特征
         token, Fp_list, Fp = self.encode_image(img, normalize=False)
         token_n, Fp_list_n, Fp_n = self.encode_image(normal_image, normalize=False)
@@ -1120,6 +1123,7 @@ class InCTRL(nn.Module):
         # --- 新增代码开始 ---
         # 计算正常分数
         normal_score = 1.0 - anomaly_score
+        # print(f'normal_score:{normal_score}')
 
         # 将正常分数和异常分数堆叠成一个二维张量
         # 使用 unsqueeze(1) 将 (batch_size,) 变为 (batch_size, 1) 以便拼接
@@ -1127,7 +1131,8 @@ class InCTRL(nn.Module):
         # --- 新增代码结束 ---
 
         img_ref_score = img_ref_score.squeeze(1)
-
+        # print(f'img_ref_score:{img_ref_score}')
+        # print('output_scores shape:', output_scores.shape)
         # 返回新的二维得分张量
         return output_scores, img_ref_score
 
