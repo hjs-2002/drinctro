@@ -1,7 +1,7 @@
 import warnings
 
 warnings.filterwarnings("ignore")
-
+from torchvision import transforms
 import cv2
 import numpy as np
 import os
@@ -88,6 +88,17 @@ def resize_long_size(img, long_size=512):
     return img_resized
 
 
+# def read_image(image_path, resize_size=None):
+#     try:
+#         image = cv2.imread(image_path)
+#         if resize_size is not None:
+#             image = resize_long_size(image, long_size=resize_size)
+#         # Revert from BGR
+#         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+#         return image, True
+#     except:
+#         print(f'{image_path} read error!!!')
+#         return np.zeros(shape=(512, 512, 3), dtype=np.uint8), False
 def read_image(image_path, resize_size=None):
     try:
         image = cv2.imread(image_path)
@@ -95,7 +106,10 @@ def read_image(image_path, resize_size=None):
             image = resize_long_size(image, long_size=resize_size)
         # Revert from BGR
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        return image, True
+        # print(image.shape)
+        return image
+        #image 类型: numpy.ndarray
+        
     except:
         print(f'{image_path} read error!!!')
         return np.zeros(shape=(512, 512, 3), dtype=np.uint8), False
@@ -440,22 +454,28 @@ def load_data(real_root_path, fake_root_path,
 
 def load_pair_data(root_path, fake_root_path=None, phase='train', seed=2023, fake_indexes='1',
                    inpainting_dir='full_inpainting'):
-    if fake_root_path is None:  # 推理加载代码，或者用于特征提取
-        assert len(root_path.split(',')) == 2
-        root_path, rec_root_path = root_path.split(',')[:2]
-        image_paths = sorted(glob.glob(f"{root_path}/*.*"))
-        rec_image_paths = sorted(glob.glob(f"{rec_root_path}/*.*"))
-        assert len(image_paths) == len(rec_image_paths)
-        total_paths = []
-        for image_path, rec_image_path in zip(image_paths, rec_image_paths):
-            total_paths.append((image_path, rec_image_path))
-        print(f'Pair data-{phase}:{len(total_paths)}.')
-        return total_paths
-    assert (len(root_path.split(',')) == 2 and len(fake_root_path.split(',')) == 2) or \
-           (root_path == fake_root_path and 'GenImage' in root_path)
+    # if fake_root_path is None:  # 推理加载代码，或者用于特征提取
+    #     assert len(root_path.split(',')) == 2
+    #     root_path, rec_root_path = root_path.split(',')[:2]
+    #     image_paths = sorted(glob.glob(f"{root_path}/*.*"))
+    #     rec_image_paths = sorted(glob.glob(f"{rec_root_path}/*.*"))
+    #     assert len(image_paths) == len(rec_image_paths)
+    #     total_paths = []
+    #     for image_path, rec_image_path in zip(image_paths, rec_image_paths):
+    #         total_paths.append((image_path, rec_image_path))
+    #     print(f'Pair data-{phase}:{len(total_paths)}.')
+    #     return total_paths
+    # assert (len(root_path.split(',')) == 2 and len(fake_root_path.split(',')) == 2) or \
+    #        (root_path == fake_root_path and 'GenImage' in root_path)
+
+
+    #训练代码 drct-2m
+    # --root_path /home/data1/Datasets/Dataset_hjs/dataset_DRCT/MSCOCO/train2017,/home/data1/Datasets/Dataset_hjs/dataset_DRCT/images/stable-diffusion-inpainting/train2017 \
+    #--fake_root_path /home/data1/Datasets/Dataset_hjs/dataset_DRCT/images/stable-diffusion-v1-4/train2017,/home/data1/Datasets/Dataset_hjs/dataset_DRCT/fake_rec_images/stable-diffusion-v1-4/train2017 \                   
     if 'MSCOCO' in root_path:
         phase_mapping = {'train': 'train2017', 'val': 'train2017', 'test': 'val2017'}
         real_root, real_rec_root = root_path.split(',')[:2]
+        
         # real_root = f'{real_root}/{phase_mapping[phase]}'
         # real_rec_root = f'{real_rec_root}/{inpainting_dir}/{phase_mapping[phase]}'
 
@@ -465,7 +485,28 @@ def load_pair_data(root_path, fake_root_path=None, phase='train', seed=2023, fak
         # fake_rec_root = f'{fake_rec_root}/{LABEL2CLASS_MAPPING[int(fake_indexes)]}/{inpainting_dir}/{phase_mapping[phase]}'
         # 
         print(f'fake_root:{fake_root}, fake_rec_root:{fake_rec_root}')
-    elif 'DR/GenImage' in root_path:
+
+
+    # 测试的 code drct-2m
+    #fake root /home/data1/Datasets/Dataset_hjs/dataset_DRCT/images，/home/data1/Datasets/Dataset_hjs/dataset_DRCT/fake_rec_images_all
+    # if 'MSCOCO' in root_path:
+    #     phase_mapping = {'train': 'train2017', 'val': 'train2017', 'test': 'val2017'}
+    #     real_root, real_rec_root = root_path.split(',')[:2]
+        
+    #     # real_root = f'{real_root}/{phase_mapping[phase]}'
+    #     # real_rec_root = f'{real_rec_root}/{inpainting_dir}/{phase_mapping[phase]}'
+
+    #     print(f'real_root:{real_root}, real_rec_root:{real_rec_root}')
+    #     fake_root, fake_rec_root = fake_root_path.split(',')[:2]
+    #     fake_root = f'{fake_root}/{LABEL2CLASS_MAPPING[int(fake_indexes)]}/{phase_mapping[phase]}'
+    #     fake_rec_root = f'{fake_rec_root}/{LABEL2CLASS_MAPPING[int(fake_indexes)]}/{inpainting_dir}/{phase_mapping[phase]}'
+    #     # fake_image_paths = sorted(glob.glob(f"{fake_root}/*.*"))
+    #     # fake_image_rec_paths = sorted(glob.glob(f"{fake_rec_root}/*.*"))
+    #     # print(f'Fake data-{phase}:{len(fake_image_paths)}.')
+    #     # print(f'Fake rec data-{phase}:{len(fake_image_rec_paths)}.')
+    #     # print(f'fake_root:{fake_root}, fake_rec_root:{fake_rec_root}')
+    #GenImage 训练和测试代码
+    if 'DR/GenImage' in root_path:
         phase_mapping = {'train': 'train', 'val': 'train', 'test': 'val'}
         fake_indexes = int(fake_indexes)
         assert 1 <= fake_indexes <= 8 and inpainting_dir in ['inpainting', 'inpainting2', 'inpainting_xl']
@@ -476,39 +517,71 @@ def load_pair_data(root_path, fake_root_path=None, phase='train', seed=2023, fak
         fake_rec_root = f'{root_path}/{fake_name}/{phase_mapping[phase]}/ai/{inpainting_dir}'
         print(f'fake_name:{fake_name}')
         # print(real_root, real_rec_root, fake_root, fake_rec_root)
-    else:
-        real_root, real_rec_root = root_path.split(',')[:2]
-        fake_root, fake_rec_root = fake_root_path.split(',')[:2]
+    # else:
+    #     real_root, real_rec_root = root_path.split(',')[:2]
+    #     fake_root, fake_rec_root = fake_root_path.split(',')[:2]
     image_paths, labels = [], []
     # load real images
+    percent = 1
     real_image_paths = sorted(glob.glob(f"{real_root}/*.*"))
     real_image_rec_paths = sorted(glob.glob(f"{real_rec_root}/*.*"))
 
+    #正常加载代码
+    real_image_paths = real_image_paths[:int(len(real_image_paths) * percent)]
+    real_image_rec_paths = real_image_rec_paths[:int(len(real_image_rec_paths) * percent)]
    
+    # 限制真实图片数量为40000张，Genimage训练
+    # real_image_paths = real_image_paths[:160000]
+    # real_image_rec_paths = real_image_rec_paths[:160000]
+
+    # print(f'Real data-{phase}:{len(real_image_paths)}.')
+    # print(f'Real rec data-{phase}:{len(real_image_rec_paths)}.')
+    
     assert len(real_image_paths) == len(real_image_rec_paths) and len(real_image_paths) > 0
     total_real = len(real_image_paths)
     if phase != 'test':
         real_image_paths, real_image_rec_paths = split_data(real_image_paths, real_image_rec_paths, phase=phase, seed=seed)
     for real_image_path, real_image_rec_path in zip(real_image_paths, real_image_rec_paths):
         image_paths.append((real_image_path, real_image_rec_path))
+    print(f'Real data-split{phase}:{len(real_image_paths)}.')
+    print(f'Real rec data-split{phase}:{len(real_image_rec_paths)}.')
     # load fake images
-    print(f'Real data-{phase}:{len(real_image_paths)}.')
-    print(f'Real rec data-{phase}:{len(real_image_rec_paths)}.')
-
+    
     fake_image_paths = sorted(glob.glob(f"{fake_root}/*.*"))
     fake_image_rec_paths = sorted(glob.glob(f"{fake_rec_root}/*.*"))
+   
+    # #正常加载代码
+    fake_image_paths = fake_image_paths[:int(len(fake_image_paths) * percent)]
+    fake_image_rec_paths = fake_image_rec_paths[:int(len(fake_image_rec_paths) * percent)]
+    
+    # 限制伪造图片数量为40000张，Genimage训练
+    # fake_image_paths = fake_image_paths[:160000]
+    # fake_image_rec_paths = fake_image_rec_paths[:160000]
+    # print(f'Fake data-{phase}:{len(fake_image_paths)}.')
+    # print(f'Fake rec data-{phase}:{len(fake_image_rec_paths)}.')
+    
     assert len(fake_image_paths) == len(fake_image_rec_paths) and len(fake_image_paths) > 0
     total_fake = len(fake_image_paths)
     if phase != 'test':
         fake_image_paths, fake_image_rec_paths  = split_data(fake_image_paths, fake_image_rec_paths, phase=phase, seed=seed)
     for fake_image_path, fake_image_rec_path in zip(fake_image_paths, fake_image_rec_paths):
         image_paths.append((fake_image_path, fake_image_rec_path))
-    print(f'Fake data-{phase}:{len(fake_image_paths)}.')
-    print(f'Fake rec data-{phase}:{len(fake_image_rec_paths)}.')
-    labels = [0 for _ in range(len(real_image_paths))] + [1 for _ in range(len(fake_image_paths))]
+    print(f'Fake data-split{phase}:{len(fake_image_paths)}.')
+    print(f'Fake rec data-split{phase}:{len(fake_image_rec_paths)}.')
+
+    required_models = [
+        'stable-diffusion-inpainting',
+        'stable-diffusion-2-inpainting', 
+        'stable-diffusion-xl-1.0-inpainting-0.1'
+    ]
+    if any(model in fake_root for model in required_models):
+        labels = [0 for _ in range(len(real_image_paths))] + [0 for _ in range(len(fake_image_paths))]
+    else:
+        labels = [0 for _ in range(len(real_image_paths))] + [1 for _ in range(len(fake_image_paths))]
     print(f'Phase:{phase}, real:{len(real_image_paths)}, fake:{len(fake_image_paths)},'
           f'Total real:{total_real}, fake:{total_fake}')
-
+    print(f'前五个样本:{image_paths[:5]}，前五个标签:{labels[:5]}')
+    print(f"最后5个样本：{image_paths[-5:]}, 最后5个标签:{labels[-5:]}")
     return image_paths, labels
 
 # def get_all_image_paths(base_dir, subfolders, exts=['jpg', 'jpeg', 'png', 'bmp', 'tiff']):
@@ -601,6 +674,8 @@ def load_ff_images(root_path='/home/law/HDD/serein/Dataset/FF++', phase='train',
     print(f'total real:{len(real_images)}, total fake:{len(fake_images)}, total:{len(total_images)}')
 
     return total_images, labels
+def _convert_to_rgb(image):
+    return image.convert('RGB')
 
 class AIGCDetectionDataset(Dataset):
     def __init__(self, root_path='dataset/MSCOCO', fake_root_path='/disk4/chenby/dataset/DRCT-2M',
@@ -633,7 +708,19 @@ class AIGCDetectionDataset(Dataset):
         # 若 num_classes 为 None，则根据 fake_indexes 中类别数量加 1 计算类别数，否则直接使用传入的 num_classes
         self.num_classes = len(fake_indexes.split(',')) + 1 if num_classes is None else num_classes
         # 保存图像数据预处理的转换函数
+        #drct的transform 和dire的transform一样
         self.transform = transform
+        #使用side的transform
+      
+        ###inctrl的transform
+    #     transform2 = transforms.Compose([
+    #     transforms.Resize(size=224, interpolation=transforms.InterpolationMode.BICUBIC),
+    #     transforms.CenterCrop(size=(224, 224)),
+    #     _convert_to_rgb,
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))
+    # ])
+    #     self.transform = transform2
         # 保存是否使用标签的标志
         self.use_label = use_label
         # 保存数据过滤的正则表达式
@@ -656,11 +743,11 @@ class AIGCDetectionDataset(Dataset):
                 self.image_paths, self.labels = load_DRCT_2M(real_root_path=root_path,
                                                              fake_root_path=fake_root_path,
                                                              fake_indexes=fake_indexes, phase=phase, seed=seed)
-            elif 'GenImage' in root_path and fake_root_path == '':
-            # elif 'GenImage' in root_path and fake_root_path == '/home/law/data/GenImage':    
-                # 若根目录包含 GenImage 且假图像根目录为空，调用 load_GenImage 函数加载 GenImage 数据集的图像数据及其标签
-                self.image_paths, self.labels = load_GenImage(root_path=root_path, phase=phase, seed=seed,
-                                                              indexes=fake_indexes)
+            # elif 'GenImage' in root_path and fake_root_path == '':
+            # # elif 'GenImage' in root_path and fake_root_path == '/home/law/data/GenImage':    
+            #     # 若根目录包含 GenImage 且假图像根目录为空，调用 load_GenImage 函数加载 GenImage 数据集的图像数据及其标签
+            #     self.image_paths, self.labels = load_GenImage(root_path=root_path, phase=phase, seed=seed,
+            #                                                   indexes=fake_indexes)
             elif 'FF++' in root_path:
                 print(f'FF++ root_path:{root_path}, phase:{phase}, seed:{seed}, fake_indexes:{fake_indexes}')
                 self.image_paths,self.labels = load_ff_images(root_path=root_path, phase=phase, seed=seed,
@@ -703,22 +790,40 @@ class AIGCDetectionDataset(Dataset):
 
     def get_labels(self):
         return list(self.labels)
-
+    def _load_image(self, path: str) -> Image.Image:
+        if 'npy' in path[-3:]:
+            img = np.load(path)
+            return img
+        return Image.open(path)
+    #drct和dire transform 的用法
     def __getitem__(self, index):
-        print(f'index:{index}')
+        # print(f'index:{index}')
         if not self.is_dire:
-            # image_path = self.image_paths[index]
-            # image, is_success = read_image(image_path)
-            image_path, rec_image_path = self.image_paths[index]
-            image, is_success = read_image(image_path)
-            rec_image, rec_is_success = read_image(rec_image_path)
-            is_success = is_success and rec_is_success
-            print("image shape:", image.shape)
-            print("rec_image shape:", rec_image.shape)
-            # image_list = list()
-            # image_list.append(image)
-            # image_list.append(rec_image)
             
+            image_path, rec_image_path = self.image_paths[index]
+           
+            image = read_image(image_path)
+            rec_image = read_image(rec_image_path)
+          
+            # print("image shape:", image.shape)
+            # print("rec_image shape:", rec_image.shape)
+       
+            # image = self.transform(Image.fromarray(image))
+            # rec_image = self.transform(Image.fromarray(rec_image)) # <--- 新增
+
+            # image = self.transform(image)
+            # rec_image = self.transform(rec_image) # <--- 新增
+           
+            transformed = self.transform(image=image, rec_image=rec_image)
+            image = transformed['image']
+            rec_image = transformed['rec_image']
+            #drct transform的错误用法
+            # data = self.transform(image=image)
+            # image = data["image"]
+            # rec_data = self.transform(image=rec_image) # <--- 新增
+            # rec_image = rec_data["image"] # <--- 新增
+            # print("after transform image shape:", image.shape)
+            # print("after transform rec_image shape:", rec_image.shape)
         else:
             image_path, rec_image_path = self.image_paths[index]
             image, is_success = read_image(image_path)
@@ -726,7 +831,7 @@ class AIGCDetectionDataset(Dataset):
             is_success = is_success and rec_is_success
             image = calculate_dire(image, rec_image, phase=self.phase)
 
-        # 测试后处理攻击
+        #测试后处理攻击
         if self.phase == 'test' and self.post_aug_mode is not None:
             if 'jpeg' in self.post_aug_mode:
                 compress_val = int(self.post_aug_mode.split('_')[1])
@@ -737,36 +842,14 @@ class AIGCDetectionDataset(Dataset):
 
         label = 0  # default label
         if self.use_label:
-            label = self.labels[index] if is_success else 0
+            # label = self.labels[index] if is_success else 0
+            label = self.labels[index] 
             if label == 0:
                 type = 'real'
             else :
                 type = 'fake'
 
-        if self.transform is not None and not self.is_dire:
-            try:
-                if isinstance(self.transform, torchvision.transforms.transforms.Compose):
-                    image = self.transform(Image.fromarray(image))
-                    rec_image = self.transform(Image.fromarray(rec_image))
-                    print("transform success!!!")
-                    print("image shape:", image.shape)
-                else:
-                    data = self.transform(image=image)
-                    image = data["image"]
-                    rec_data = self.transform(image=rec_image) # <--- 新增
-                    rec_image = rec_data["image"] # <--- 新增
-            except:
-                print("transform error!!!")
-                image = np.zeros(shape=(512, 512, 3), dtype=np.uint8)
-                if isinstance(self.transform, torchvision.transforms.transforms.Compose):
-                    image = self.transform(Image.fromarray(image))
-                    rec_image = self.transform(Image.fromarray(rec_image)) # <--- 新增
-                else:
-                    data = self.transform(image=image)
-                    image = data["image"]
-                    rec_data = self.transform(image=rec_image) # <--- 新增
-                    rec_image = rec_data["image"] # <--- 新增
-                label = 0
+      
         image_list = [image, rec_image]
         if not self.use_label:
             return image, image_path.replace(f"{self.root_path}", '')  # os.path.basename(image_path)
@@ -775,7 +858,95 @@ class AIGCDetectionDataset(Dataset):
             label = one_hot(self.num_classes, label)
 
         return image_list, type, label
+    
+    # ##inctro transform的用法
+    # def __getitem__(self, index):
+    #     # print(f'index:{index}')
+    #     if not self.is_dire:
+            
+            
+    #         image_path, rec_image_path = self.image_paths[index]
+    #         image = self._load_image(image_path)
+    #         rec_image = self._load_image(rec_image_path)
+    #         # image = read_image(image_path)
+    #         # rec_image = read_image(rec_image_path)
+    #         # is_success = is_success and rec_is_success
+    #         # print("image shape:", image.shape)
+    #         # print("rec_image shape:", rec_image.shape)
+    #         # image_list = list()
+    #         # image_list.append(image)
+    #         # image_list.append(rec_image)
+    #         # image = self.transform(Image.fromarray(image))
+    #         # rec_image = self.transform(Image.fromarray(rec_image)) # <--- 新增
 
+    #         image = self.transform(image)
+    #         rec_image = self.transform(rec_image) # <--- 新增
+           
+          
+            
+    #         #drct transform的用法
+    #         # data = self.transform(image=image)
+    #         # image = data["image"]
+    #         # rec_data = self.transform(image=rec_image) # <--- 新增
+    #         # rec_image = rec_data["image"] # <--- 新增
+    #         # print("after transform image shape:", image.shape)
+    #         # print("after transform rec_image shape:", rec_image.shape)
+    #     else:
+    #         image_path, rec_image_path = self.image_paths[index]
+    #         image, is_success = read_image(image_path)
+    #         rec_image, rec_is_success = read_image(rec_image_path)
+    #         is_success = is_success and rec_is_success
+    #         image = calculate_dire(image, rec_image, phase=self.phase)
 
+    #     #测试后处理攻击
+    #     if self.phase == 'test' and self.post_aug_mode is not None:
+    #         if 'jpeg' in self.post_aug_mode:
+    #             compress_val = int(self.post_aug_mode.split('_')[1])
+    #             image = cv2_jpg(image, compress_val)
+    #         elif 'scale' in self.post_aug_mode:
+    #             scale = float(self.post_aug_mode.split('_')[1])
+    #             image = cv2_scale(image, scale)
+
+    #     label = 0  # default label
+    #     if self.use_label:
+    #         # label = self.labels[index] if is_success else 0
+    #         label = self.labels[index] 
+    #         if label == 0:
+    #             type = 'real'
+    #         else :
+    #             type = 'fake'
+
+    #     # if self.transform is not None and not self.is_dire:
+    #     #     try:
+    #     #         if isinstance(self.transform, torchvision.transforms.transforms.Compose):
+    #     #             image = self.transform(Image.fromarray(image))
+    #     #             rec_image = self.transform(Image.fromarray(rec_image))
+    #     #             # print("transform success!!!")
+    #     #             print("image shape:", image.shape)
+    #     #         else:
+    #     #             data = self.transform(image=image)
+    #     #             image = data["image"]
+    #     #             rec_data = self.transform(image=rec_image) # <--- 新增
+    #     #             rec_image = rec_data["image"] # <--- 新增
+    #     #     except:
+    #     #         # print("transform error!!!")
+    #     #         image = np.zeros(shape=(512, 512, 3), dtype=np.uint8)
+    #     #         if isinstance(self.transform, torchvision.transforms.transforms.Compose):
+    #     #             image = self.transform(Image.fromarray(image))
+    #     #             rec_image = self.transform(Image.fromarray(rec_image)) # <--- 新增
+    #     #         else:
+    #     #             data = self.transform(image=image)
+    #     #             image = data["image"]
+    #     #             rec_data = self.transform(image=rec_image) # <--- 新增
+    #     #             rec_image = rec_data["image"] # <--- 新增
+    #     #         label = 0
+    #     image_list = [image, rec_image]
+    #     if not self.use_label:
+    #         return image, image_path.replace(f"{self.root_path}", '')  # os.path.basename(image_path)
+
+    #     if self.is_one_hot:
+    #         label = one_hot(self.num_classes, label)
+
+    #     return image_list, type, label
 
 
