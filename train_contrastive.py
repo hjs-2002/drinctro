@@ -152,6 +152,8 @@ from utils.losses import LabelSmoothing, CombinedLoss, FocalLoss
 # 从 data.transform 模块导入 create_train_transforms 和 create_val_transforms 函数
 # 用于创建训练集和验证集的数据预处理转换操作
 from data.transform import create_train_transforms, create_val_transforms
+from data.transform import create_sdie_transforms, create_sdie_transforms_dup
+
 
 
 def merge_tensor(img, label, is_train=True):
@@ -235,6 +237,7 @@ def eval_model(model, epoch, eval_loader, tokenizer, is_save=True, threshold=0.5
             img = [i.cuda() for i in img] # 遍历列表，分别将每个张量移到GPU
             label = label.cuda() # 标签张量也需要移动到GPU
             # 前向传播，获取模型的预测结果和嵌入向量
+            batch_size = img[0].size(0)
             # y_pred, embeddings = model(img, return_feature=True)
             y_pred, _ = model(tokenizer,img , type, None)
             # 对预测结果应用 Softmax 函数，将输出转换为概率分布
@@ -248,11 +251,11 @@ def eval_model(model, epoch, eval_loader, tokenizer, is_save=True, threshold=0.5
             # 存储当前批次的真实标签
             labels.append(label)
             # 计算当前批次的准确率
-            acc = (torch.max(y_pred.detach(), 1)[1] == label).sum().item() / img.size(0)
+            acc = (torch.max(y_pred.detach(), 1)[1] == label).sum().item() / batch_size
             # 更新损失平均值
-            losses.update(loss.item(), img.size(0))
+            losses.update(loss.item(), batch_size)
             # 更新准确率平均值
-            accuracies.update(acc, img.size(0))
+            accuracies.update(acc, batch_size)
 
     # 将所有批次的预测输出拼接成一个张量，并转换为 NumPy 数组
     outputs = torch.cat(outputs, dim=0).cpu().numpy()
@@ -261,7 +264,7 @@ def eval_model(model, epoch, eval_loader, tokenizer, is_save=True, threshold=0.5
     # 将标签大于 0 的值都设为 1，转换为二分类标签
     labels[labels > 0] = 1
     # 计算 AUC 分数
-    auc = roc_auc_score(labels, outputs)
+    # auc = roc_auc_score(labels, outputs)
     # 计算召回率
     recall = recall_score(labels, outputs > threshold)
     # 计算精确率
@@ -273,7 +276,8 @@ def eval_model(model, epoch, eval_loader, tokenizer, is_save=True, threshold=0.5
     # 计算 FNR（假阴性率）
     fnr = calculate_fnr(labels, outputs > threshold)
     # 打印评估指标
-    print(f'AUC:{auc}-Recall:{recall}-Precision:{precision}-BinaryAccuracy:{binary_acc}, f1: {f1}, fnr:{fnr}')
+    # print(f'AUC:{auc}-Recall:{recall}-Precision:{precision}-BinaryAccuracy:{binary_acc}, f1: {f1}, fnr:{fnr}')
+    print(f'Recall:{recall}-Precision:{precision}-BinaryAccuracy:{binary_acc}, f1: {f1}, fnr:{fnr}')
     # 如果需要保存评估日志
     if is_save:
         train_logger.log(phase="val", values={
@@ -287,7 +291,7 @@ def eval_model(model, epoch, eval_loader, tokenizer, is_save=True, threshold=0.5
 
     # 如果指定了保存测试结果的文本文件路径
     if save_txt is not None:
-        return binary_acc, auc, recall, precision, f1, fnr
+        return binary_acc, recall, precision, f1, fnr
 
     # 否则返回平均准确率
     return accuracies.avg
@@ -316,12 +320,16 @@ def train_model(model, criterion, optimizer,tokenizer, epoch, scaler=None, alpha
     # 遍历训练数据加载器中的每个批次
     for i, (input, types, label) in enumerate(training_process):
         # 合并图像和标签张量，并在训练阶段对合并后的张量进行随机打乱
-
-        
-
+        # input, label = merge_tensor(input, label, is_train=True)
+        # print(input)
+        # print('input type:', type(input))
+        # # print('input shape:', input.shape)
+        # print('input[0] shape:', input[0].shape)
 
         # input, label = merge_tensor(input, label, is_train=True)
         # 清空优化器中之前计算的梯度信息，避免梯度累积
+        model.total_steps += 1
+        # print('total steps:', model.total_steps)
         optimizer.zero_grad()
         # 获取当前优化器的学习率
         current_lr = optimizer.param_groups[0]['lr']
@@ -340,6 +348,7 @@ def train_model(model, criterion, optimizer,tokenizer, epoch, scaler=None, alpha
         if scaler is None:
             # 不使用混合精度训练，直接进行前向传播
             # y_pred, embeddings = model(x, return_feature=True)
+            batch_size = input[0].size(0)
             preds, preds2 = model(tokenizer,input , types, None)
             # 计算总损失，包括分类损失和对比损失
             # loss = (1-alpha) * criterion(y_pred, label) + alpha * contrastive_loss(embeddings, label)
@@ -347,17 +356,18 @@ def train_model(model, criterion, optimizer,tokenizer, epoch, scaler=None, alpha
             # loss = criterion(preds, label) + criterion(preds2, label)
             loss = criterion(preds, label) 
             # 计算当前批次的准确率
-            acc = (torch.max(preds.detach(), 1)[1] == label).sum().item() / input.size(0)
+            acc = (torch.max(preds.detach(), 1)[1] == label).sum().item() / batch_size
             # 更新损失平均值
-            losses.update(loss.item(), input.size(0))
+            losses.update(loss.item(), batch_size)
             # 更新准确率平均值
-            accuracies.update(acc, input.size(0))
+            accuracies.update(acc, batch_size)
 
             # 反向传播，计算损失函数关于模型参数的梯度
             loss.backward()
             # 根据计算得到的梯度更新模型参数
             optimizer.step()
         else:
+            batch_size = input[0].size(0)
             # 使用混合精度训练，在 autocast 上下文管理器中进行前向传播，以减少内存使用和加速计算
             with autocast():
                 preds, preds2 = model(tokenizer,input , types, None)
@@ -365,11 +375,12 @@ def train_model(model, criterion, optimizer,tokenizer, epoch, scaler=None, alpha
                 # loss = (1-alpha) * criterion(preds, label) + alpha * criterion(preds2, label)
                 loss = criterion(preds, label) 
             # 计算当前批次的准确率
-            acc = (torch.max(preds.detach(), 1)[1] == label).sum().item() / input.size(0)
+            acc = (torch.max(preds.detach(), 1)[1] == label).sum().item() / batch_size
             # 更新损失平均值
-            losses.update(loss.item(), input.size(0))
+            
+            losses.update(loss.item(), batch_size)
             # 更新准确率平均值
-            accuracies.update(acc, input.size(0))
+            accuracies.update(acc, batch_size)
 
             # 使用梯度缩放器对损失进行缩放后再反向传播，避免梯度下溢
             scaler.scale(loss).backward()
@@ -377,6 +388,8 @@ def train_model(model, criterion, optimizer,tokenizer, epoch, scaler=None, alpha
             scaler.step(optimizer)
             # 更新梯度缩放器的状态，为下一次迭代做准备
             scaler.update()
+        if model.total_steps in [10,500,1500,3000,5000,8000,10000,12000,18000,20000,23000,25000]: # save models at these iters 
+                torch.save(model.state_dict(), os.path.join(store_name, f'iter_{model.total_steps}.pth'))    
         # 如果使用学习率预热，在预热调度器的上下文中更新学习率
         if args.is_warmup:
             with warmup_scheduler.dampening():
@@ -394,6 +407,7 @@ def train_model(model, criterion, optimizer,tokenizer, epoch, scaler=None, alpha
     # 打印训练集的平均损失和平均准确率
     print("Train:\t Loss:{0:.4f} \t Acc:{1:.4f}".format(losses.avg, accuracies.avg))
     # 删除损失和准确率平均计算器对象，释放内存
+    
     del losses, accuracies
     # 手动触发垃圾回收，清理不再使用的内存
     gc.collect()
@@ -405,9 +419,14 @@ if __name__ == '__main__':
     # 根据每个 GPU 的批次大小和可用 GPU 数量计算总的批次大小
     batch_size = args.batch_size * torch.cuda.device_count()
     # 定义日志文件的存储路径
-    writeFile = f"./output_more_epoch/{args.dataset_name}/{args.fake_indexes.replace(',', '_')}/" \
+    # writeFile = f"./output_DR-inctro_transform-drct_dire_final/{args.dataset_name}/{args.fake_indexes.replace(',', '_')}/" \
+    #             f"{args.model_name.split('/')[-1]}_{args.input_size}{args.save_flag}/logs"
+
+    #genimage路径
+    writeFile = f"./output_DR-inctro_transform-drct_dire_genimage_all/{args.dataset_name}/{args.fake_indexes.replace(',', '_')}/" \
                 f"{args.model_name.split('/')[-1]}_{args.input_size}{args.save_flag}/logs"
     # 定义模型权重文件的存储路径
+    print(f'使用create_side_transforms')
     store_name = writeFile.replace('/logs', '/weights')
     # 打印当前使用的 GPU 设备 ID、批次大小、GPU 数量和分类数量
     print(
@@ -416,7 +435,7 @@ if __name__ == '__main__':
     model = get_models(model_name=args.model_name, num_classes=args.num_classes,
                        embedding_size=args.embedding_size, freeze_extractor=args.freeze_extractor)
     
-    with open("/home/law/HDD/Project_hjs/clip/ViT-L-14.pt", "rb") as f:
+    with open("/home/law/.cache/clip/ViT-L-14.pt", "rb") as f:
             checkpoint = torch.load(f, map_location="cpu")
     start_epoch = 0
     # model = model.module
@@ -455,7 +474,9 @@ if __name__ == '__main__':
         # 设置训练数据集加载器
         xdl = AIGCDetectionDataset(args.root_path, fake_root_path=args.fake_root_path, fake_indexes=args.fake_indexes, phase='train',
                                    num_classes=args.num_classes, inpainting_dir=args.inpainting_dir, is_dire=args.is_dire,
-                                   transform=create_train_transforms(size=args.input_size, is_crop=args.is_crop)
+                                #    transform=create_train_transforms(size=args.input_size, is_crop=args.is_crop)
+                                      transform=create_sdie_transforms(size=args.input_size, phase='train')
+                                    #   transform=create_sdie_transforms_dup(size=args.input_size, phase='train')
                                    )
         # 如果指定了采样器模式，则使用 BalanceClassSampler 进行采样，否则不使用采样器
         sampler = BalanceClassSampler(labels=xdl.get_labels(), mode=args.sampler_mode) if args.sampler_mode != '' else None  # "upsampling"
@@ -466,15 +487,17 @@ if __name__ == '__main__':
         # 设置验证数据集加载器
         xdl_eval = AIGCDetectionDataset(args.root_path, fake_root_path=args.fake_root_path, fake_indexes=args.fake_indexes, phase='val',
                                         num_classes=args.num_classes, inpainting_dir=args.inpainting_dir, is_dire=args.is_dire,
-                                        transform=create_val_transforms(size=args.input_size, is_crop=args.is_crop)
+                                        # transform=create_val_transforms(size=args.input_size, is_crop=args.is_crop)
+                                        transform=create_sdie_transforms(size=args.input_size, phase='val')
+                                        # transform=create_sdie_transforms_dup(size=args.input_size, phase='val')
                                         )
         eval_loader = DataLoader(xdl_eval, batch_size=batch_size, shuffle=False, num_workers=args.num_workers)
         # 获取验证数据集的长度
         eval_dataset_len = len(xdl_eval)
         # 打印训练数据集和验证数据集的长度
         print('train_dataset_len:', train_dataset_len, 'eval_dataset_len:', eval_dataset_len)
-
-        tokenizer = open_clip.get_tokenizer('ViT-B-16-plus-240')
+      
+        tokenizer = open_clip.get_tokenizer('ViT-L-14')
 
 
         # 定义优化器为 AdamW
@@ -495,11 +518,11 @@ if __name__ == '__main__':
         best_acc = 0.5 if args.epoch_start == 0 else eval_model(model, args.epoch_start - 1, eval_loader, is_save=False)
         # 开始训练循环
         for epoch in range(args.epoch_start, args.num_epochs):
-            # 训练一个轮次
+            # 训练一个轮次xaezfvaerv
             train_model(model, criterion, optimizer,tokenizer, epoch, scaler=GradScaler() if args.is_amp else None, alpha=args.alpha)
             # 每一轮或最后一轮进行验证
             if epoch % 1 == 0 or epoch == args.num_epochs - 1:
-                acc = eval_model(model, epoch,optimizer, eval_loader, alpha=args.alpha)
+                acc = eval_model(model, epoch, eval_loader,tokenizer, alpha=args.alpha)
                 # 如果当前准确率高于最佳准确率，更新最佳准确率并保存模型
                 if best_acc < acc:
                     best_acc = acc
@@ -508,6 +531,13 @@ if __name__ == '__main__':
                         torch.save(model.module.state_dict(), save_path)
                     else:
                         torch.save(model.state_dict(), save_path)
+                
+                    
+                # save_path = '{}/{}_acc{:.4f}.pth'.format(store_name, epoch, acc)
+                # if torch.cuda.device_count() > 1:
+                #         torch.save(model.module.state_dict(), save_path)
+                # else:
+                #         torch.save(model.state_dict(), save_path)    
             # 打印当前最佳准确率
             print(f'Current best acc:{best_acc}')
         # 保存最后一轮的模型
@@ -517,6 +547,7 @@ if __name__ == '__main__':
         else:
             torch.save(model.state_dict(), last_save_path)
     else:
+        tokenizer = open_clip.get_tokenizer('ViT-L-14')
         # 记录测试开始时间
         start = time.time()
         epoch_start = 1
@@ -525,7 +556,9 @@ if __name__ == '__main__':
         xdl_test = AIGCDetectionDataset(args.root_path, fake_root_path=args.fake_root_path, fake_indexes=args.fake_indexes,
                                         phase='test', num_classes=args.num_classes, is_dire=args.is_dire,
                                         post_aug_mode=args.post_aug_mode, inpainting_dir=args.inpainting_dir,
-                                        transform=create_val_transforms(size=args.input_size, is_crop=args.is_crop)
+                                        # transform=create_val_transforms(size=args.input_size, is_crop=args.is_crop)
+                                        transform=create_sdie_transforms(size=args.input_size, phase='test')
+                                        # transform=create_sdie_transforms_dup(size=args.input_size, phase='test')
                                         )
         # 设置测试数据集加载器
         test_loader = DataLoader(xdl_test, batch_size=batch_size, shuffle=False, num_workers=4)
@@ -534,14 +567,14 @@ if __name__ == '__main__':
         # 打印测试数据集的长度
         print('test_dataset_len:', test_dataset_len)
         # 评估模型在测试集上的性能
-        out_metrics = eval_model(model, epoch_start, test_loader, is_save=False, threshold=args.threshold, save_txt=args.save_txt)
+        out_metrics = eval_model(model, epoch_start, test_loader, tokenizer, is_save=False, threshold=args.threshold, save_txt=args.save_txt)
         # 打印测试总耗时
         print('Total time:', time.time() - start)
         # 保存测试结果
         if args.save_txt is not None:
             # 创建保存测试结果文件的目录
             os.makedirs(os.path.dirname(args.save_txt), exist_ok=True)
-            acc, auc, recall, precision, f1, fnr = out_metrics
+            acc, recall, precision, f1, fnr = out_metrics
             with open(args.save_txt, 'a') as file:
                 if args.dataset_name == 'GenImage':
                     class_name = GenImage_LIST[int(args.fake_indexes) - 1]
@@ -550,7 +583,7 @@ if __name__ == '__main__':
                 else:
                     class_name = list(CLASS2LABEL_MAPPING.keys())[int(args.fake_indexes)]
                 result_str = f'model_path:{args.model_path}, post_aug_mode:{args.post_aug_mode}, class_name:{class_name}\n' \
-                             f'acc:{acc:.4f}, auc:{auc:.4f}, recall:{recall:.4f}, precision:{precision:.4f}, ' \
+                             f'acc:{acc:.4f},  recall:{recall:.4f}, precision:{precision:.4f}, ' \
                              f'f1:{f1:.4f}, fnr: {fnr}\n'
                 file.write(result_str)
             # 打印测试结果保存路径
