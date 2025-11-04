@@ -1,4 +1,4 @@
-import torch
+# import torch
 import torch.nn as nn
 from torch.nn import init
 import timm
@@ -546,12 +546,19 @@ def get_texts(obj_name):
     l = [ 'real','fake','ai generated','original','reconstructed','human face', 'cat', 'dog', 'bird', 'car', 'bus', 'truck', 'airplane', 'flower', 'tree', 'fruit', 'vegetable', 'fish', 'insect', 'mammal', 'reptile', 'amphibian', 'furniture', 'appliance', 'electronic device', 'clothing', 'accessory', 'tool', 'utensil', 'toy']
     if obj_name in l:
         # 对于基本对象类别，使用简单的文本描述
-        reconstructed_texts = []
-        original_texts = []
-        reconstructed = "a reconstructed photo of " + obj_name + " for AIGC detection."
-        reconstructed_texts.append(reconstructed)
-        original = "a original photo of " + obj_name + " for AIGC detection."
-        original_texts.append(original)
+        # reconstructed_texts = []
+        # original_texts = []
+        # reconstructed = "a reconstructed photo of " + obj_name + " for AIGC detection."
+        # reconstructed_texts.append(reconstructed)
+        # original = "a original photo of " + obj_name + " for AIGC detection."
+        # original_texts.append(original)
+
+        real_texts = []
+        fake_texts = []
+        real = "a photo of " + 'real' + " for AIGC detection."
+        real_texts.append(real)
+        fake = "a photo of " + 'fake' + " for AIGC detection."
+        fake_texts.append(fake)
     else:
         # 对于其他对象，使用模板和状态描述组合生成丰富的文本描述
         normal_states = [s.format(obj_name) for s in state_level["normal"]]
@@ -560,7 +567,8 @@ def get_texts(obj_name):
         normal_texts = [t.format(state) for state in normal_states for t in template_level]
         anomaly_texts = [t.format(state) for state in anomaly_states for t in template_level]
 
-    return reconstructed_texts, original_texts
+    # return reconstructed_texts, original_texts
+    return real_texts, fake_texts
 
 
 def _build_vision_tower(
@@ -659,8 +667,13 @@ def _build_vision_tower_Mul(
             image_size=vision_cfg.image_size,
             width=vision_cfg.width,
         )
+
+    #进入多模态
+
     else:
+        # 对于多模态，使用多模态的Transformer，width=1024，head_width=64
         vision_heads = vision_cfg.width // vision_cfg.head_width
+        #16
         norm_layer = LayerNormFp32 if cast_dtype in (torch.float16, torch.bfloat16) else LayerNorm
         visual = VisionTransformer_Mul(
             image_size=vision_cfg.image_size,
@@ -856,7 +869,8 @@ class TransformerBasicHead(nn.Module):
         x = self.bn3(x)
         # 第三层：线性变换 -> sigmoid激活
         x = self.projection3(x)
-        return torch.sigmoid(x)
+        # return torch.sigmoid(x)
+        return x
 
 # ... existing code ...
 class Adapter(nn.Module):
@@ -936,15 +950,15 @@ class InCTRL(nn.Module):
         # self.diff_head = TransformerBasicHead(225, 1)
         self.diff_head = TransformerBasicHead(256, 1)
         self.diff_head_ref = TransformerBasicHead(768, 1)
-
+        # self.fc = nn.Linear( 1024, 1 )
         # 冻结视觉和文本编码器的参数
         for p in self.visual.parameters():
             p.requires_grad = False
 
         for p in text.parameters():
             p.requires_grad = False
-
-    def encode_image(self, image, out_layers: list = [7, 9, 11], normalize: bool = False):
+#   list = [7, 9, 11]
+    def encode_image(self, image, out_layers: list = [6, 12, 18,21], normalize: bool = False):
         """
         编码图像特征。
 
@@ -997,13 +1011,18 @@ class InCTRL(nn.Module):
             img_ref_score (torch.Tensor): 图像参考得分。
         """
         # 处理输入图像和正常图像
+        #来到了这布
         if normal_list == None:
+            #img 是原始图片
             img = image[0].cuda(non_blocking=True)
             normal_image = image[1:]
+            # img = image[1].cuda(non_blocking=True)
+            # normal_image = image[0]
             normal_image = torch.stack(normal_image)
             shot, b, _, _, _ = normal_image.shape
             normal_image = normal_image.reshape(-1, 3,224, 224).cuda(non_blocking=True)
         else:
+            
             img = image[0].cuda(non_blocking=True)
             normal_image = normal_list
             normal_image = torch.stack(normal_image)
@@ -1018,79 +1037,138 @@ class InCTRL(nn.Module):
         token, Fp_list, Fp = self.encode_image(img, normalize=False)
         token_n, Fp_list_n, Fp_n = self.encode_image(normal_image, normalize=False)
         # print(f'Fp_list.shape:{Fp_list.shape}, Fp_list_n.shape:{Fp_list_n.shape}')
-        # print(f'token.shape:{token.shape}, token_n.shape:{token_n.shape}')
-        # print(f'Fp.shape:{Fp.shape}, Fp_n.shape:{Fp_n.shape}')
+        print(f'token.shape:{token.shape}, token_n.shape:{token_n.shape}')
+        # token.shape:torch.Size([256, 768]), token_n.shape:torch.Size([256, 768])
+        print(f'Fp.shape:{Fp.shape}, Fp_n.shape:{Fp_n.shape}')
+        # Fp.shape:torch.Size([256, 257, 1024]), Fp_n.shape:torch.Size([256, 257, 1024])
         # 整理特征维度
         Fp_list = torch.stack(Fp_list)
         Fp_list_n = torch.stack(Fp_list_n)
-
+        print(f'Fp_list_stack.shape:{Fp_list.shape}, Fp_list_n_stack.shape:{Fp_list_n.shape}')
+        # Fp_list_stack.shape:torch.Size([4, 256, 257, 1024]), Fp_list_n_stack.shape:torch.Size([4, 256, 257, 1024])
+        #移除class token，只保留patch tokens
         Fp_list = Fp_list[:, :, 1:, :]
         Fp_list_n = Fp_list_n[:, :, 1:, :]
 
         # Fp_list = Fp_list.reshape(b, 3, 225, -1)
         # Fp_list_n = Fp_list_n.reshape(b, 3, 225 * shot, -1)
-        Fp_list = Fp_list.reshape(b, 3, 256, -1)
-        Fp_list_n = Fp_list_n.reshape(b, 3, 256 * shot, -1)
+        # Fp_list = Fp_list.reshape(b, 3, 256, -1)
+        # Fp_list_n = Fp_list_n.reshape(b, 3, 256 * shot, -1)
+        #224%14%14=16,4个中间层
+        # 假设我们有以下设置：
+# - 图像尺寸: 224x224
+# - patch大小: 14x14
+# - patch数量: (224/14) * (224/14) = 16 * 16 = 256 patches
 
+# 在VisionTransformer中，每个patch会被映射到一个特征向量
+# 虽然原始特征维度是1024，但在某些中间处理层会降维到256
+
+# 所以当我们处理特征时：
+# Fp_list.shape = [b, 4, 256, -1]
+# - b: 批次大小
+# - 4: 中间层特征数量（对应层6, 12, 18, 21）
+# - 256: 每个patch的特征维度
+# - -1: patch数量（通常是256，对应16x16的网格）
+        Fp_list = Fp_list.reshape(b, 4, 256, -1)
+        Fp_list_n = Fp_list_n.reshape(b, 4, 256 * shot, -1)
         token_n = token_n.reshape(b, shot, -1)
+        print(f'Fp_list.shape:{Fp_list.shape},Fp_list_n.shape:{Fp_list_n.shape} token.shape:{token.shape}')
+#         Fp_list.shape:torch.Size([256, 4, 256, 1024]),Fp_list_n.shape:torch.Size([256, 4, 256, 1024]) token.shape:torch.Size([256, 768])
 
         # 2. 计算图像级残差 (Image-level Residual)
         token_ad = self.adapter.forward(token)
         token_n = self.adapter.forward(token_n)
         token_n = torch.mean(token_n, dim=1)
         token_ref = token_n - token_ad
-
+        print(f'token_ref.shape:{token_ref.shape}')
+        # token_ref.shape:torch.Size([256, 768])
+        print(f'token_n.shape:{token_n.shape}')
+        
+        # token_n.shape:torch.Size([256, 768])
+        print('token_ad', token_ad)
+        print('token_n', token_n)
+        print(f'token_ref', token_ref)
+        
         text_score = []
         max_diff_score = []
         patch_ref_map = []
 
         # 遍历每个样本进行处理
-        for i in range(len(token)):
+        for i in range(len(token)):# 遍历所有样本 batch_size
             # 3. 计算多层 Patch 级残差 (Multi-layer Patch-level Residual)
-            Fp = Fp_list[i, :, :, :]
-            Fp_n = Fp_list_n[i, :, :, :]
+            Fp = Fp_list[i, :, :, :]# 提取第i张待检测图像的特征 [4, 256, 1024]
+            Fp_n = Fp_list_n[i, :, :, :]# 提取第i张图像对应的正常样本特征 [4, 256, 1024]
 
             Fp_map = list()
             # 计算 patch 级别的参考映射
-            for j in range(len(Fp)):
+            for j in range(len(Fp)):# 遍历所有层 中间特征层数量，根据代码中的out_layers=[6, 12, 18, 21]，这个值应该是4
                 tmp_x = Fp[j, :, :]
                 tmp_n = Fp_n[j, :, :]
                 am_fp = list()
                 for k in range(len(tmp_x)):
-                    tmp = tmp_x[k]
-                    tmp = tmp.unsqueeze(0)
+                    tmp = tmp_x[k]#形状 [1024] (这一个patch的特征向量)
+                    tmp = tmp.unsqueeze(0)#形状 [1, 1024] (方便矩阵运算)
+                    #特征归一化
                     tmp_n = tmp_n / tmp_n.norm(dim=-1, keepdim=True)
                     tmp = tmp / tmp.norm(dim=-1, keepdim=True)
+                    # 计算余弦相似度并转换为异常分数
+            # tmp @ tmp_n.T 计算待检测patch与所有正常样本patch的余弦相似度 [1, 1280]
+            # .min(dim=1).values 取最小相似度值（最大差异） [1]
+            # 0.5 * (1 - similarity) 将相似度转换为差异度
+                    #[1, 1024] @ [1024, 256] = [1, 256]
                     s = (0.5 * (1 - (tmp @ tmp_n.T))).min(dim=1).values
-                    am_fp.append(s)
-                am_fp = torch.stack(am_fp)
+                    am_fp.append(s)# 保存第k个patch的异常分数
+                am_fp = torch.stack(am_fp)#am_fp 形状变为 [256]。这是一个异常图（Anomaly Map），代表目标图 第6层 的每个patch与重建图的差异。
                 Fp_map.append(am_fp)
-            Fp_map = torch.stack(Fp_map)
-            Fp_map = torch.mean(Fp_map.squeeze(2), dim=0)
-            patch_ref_map.append(Fp_map)
-            score = Fp_map.max(dim=0).values
-            max_diff_score.append(score)
+            Fp_map = torch.stack(Fp_map)#Fp_map 形状变为 [4, 256]。 (4个层的异常图堆叠在一起)。
+            Fp_map = torch.mean(Fp_map.squeeze(2), dim=0)#将来自4个不同特征层的异常分数图取平均值，得到一个最终的、更鲁棒的异常分数图，形状为 [256]。
+            patch_ref_map.append(Fp_map)#存入这个最终的异常图。
+            score = Fp_map.max(dim=0).values#找出这张图中差异最明显、最可疑的那个点，将其分数作为这张图的“局部异常分”。
+            max_diff_score.append(score)#就有了批次中每张图的“最高局部异常分数”，得到形状 [256] 的 fg_score 张量
 
              # 4. 结合文本先验 (Text Prior)
-            image_feature = token[i]
-            image_feature = image_feature.unsqueeze(0)
-            image_feature = image_feature / image_feature.norm(dim=-1, keepdim=True)
+            image_feature = token[i]## 从 [256, 768] 的特征张量中，取出第1张图（即 i=0）的全局特征。形状为 [768]
+            image_feature = image_feature.unsqueeze(0)# 增加维度 [1, 768]
+            image_feature = image_feature / image_feature.norm(dim=-1, keepdim=True)# 对特征进行L2归一化，使其“长度”为1。这是计算余弦相似度的标准步骤。
 
-            obj_type = text[i]
-            reconstructed_texts, original_texts = get_texts(obj_type.replace('_', " "))
-            pos_features = tokenizer(reconstructed_texts).cuda()
-            neg_features = tokenizer(original_texts).cuda()
-            pos_features = self.encode_text(pos_features)
+            obj_type = text[i]## 获取该图像的类别标签，real or fake
+            print(f'type:{obj_type}')
+            # real_texts, fake_texts = get_texts(obj_type.replace('_', " "))
+            real_texts, fake_texts = get_texts(obj_type)
+            print(f'real_texts:{real_texts}')
+            print(f'fake_texts:{fake_texts}')   
+
+            pos_features = tokenizer(real_texts).cuda()
+            neg_features = tokenizer(fake_texts).cuda()#将这两个文本列表转换成数字ID（Tokens）
+            pos_features = self.encode_text(pos_features)#将这些Tokens转换成特征向量。
             neg_features = self.encode_text(neg_features)
+            #对文本特征进行归一化
             pos_features = pos_features / pos_features.norm(dim=-1, keepdim=True)
             neg_features = neg_features / neg_features.norm(dim=-1, keepdim=True)
+            # 如果有多个正/负样本描述，计算平均特征
             pos_features = torch.mean(pos_features, dim=0, keepdim=True)
             neg_features = torch.mean(neg_features, dim=0, keepdim=True)
+            # 再次归一化
             pos_features = pos_features / pos_features.norm(dim=-1, keepdim=True)
             neg_features = neg_features / neg_features.norm(dim=-1, keepdim=True)
+            # 6. 合并正负样本特征
             text_features = torch.cat([pos_features, neg_features], dim=0)
             score = (100 * image_feature @ text_features.T).softmax(dim=-1)
-            tmp = score[0, 1]
+# image_feature @ text_features.T
+# 形状：[1, 768] @ [768, 2] = [1, 2]
+# 含义：计算我们的“真实猫”图片特征，分别与“AI语义”和“真实语义”的余弦相似度。
+# 结果 (示例)：由于图片是真实的，它与“真实语义”的相似度会更高，例如 [[0.72, 0.95]]。
+# 100 * ...: 乘以一个放大系数（CLIP中的可学习温度参数），使相似度差异更显著。
+# 结果 (示例)：[[72, 95]]
+# .softmax(dim=-1): 将这些“分数”转换成一个总和为1的概率分布。
+# 结果 (示例)：[[0.0001, 0.9999]] (因为95远大于72，softmax会极度偏向索引1)。
+
+# 含义：这张图片有 0.01% 的概率匹配“AI语义”，有 99.99% 的概率匹配“真实语义”。
+
+            tmp = score[0, 0]
+            # print('type:{obj_type}')
+            print(f'text_score:{tmp}')
+            
             text_score.append(tmp)
 
         # 综合得分计算
@@ -1108,33 +1186,38 @@ class InCTRL(nn.Module):
 
         # return final_score, img_ref_score
         # 综合得分计算 (原始代码)
-        text_score = torch.stack(text_score).unsqueeze(1)
-        img_ref_score = self.diff_head_ref.forward(token_ref)
-        patch_ref_map = torch.stack(patch_ref_map)
+        text_score = torch.stack(text_score).unsqueeze(1)#形状变为 [256, 1]
+        img_ref_score = self.diff_head_ref.forward(token_ref)#“全局证据” token_ref（形状 [256, 768]）送入一个小型网络 self.diff_head_ref
+        #img_ref_score 的形状为 [256, 1]
+        # print('patch_ref_map shape:', patch_ref_map.shape)
+        patch_ref_map = torch.stack(patch_ref_map)# [256,256]
         holistic_map = text_score + img_ref_score + patch_ref_map
+        #holistic_map 是形状为 [256, 256] 的张量
         hl_score = self.diff_head.forward(holistic_map)
-
-        hl_score = hl_score.squeeze(1)
-        fg_score = torch.stack(max_diff_score)
-        
+        #hl_score (Holistic Score) 的形状为 [256, 1]。
+        hl_score = hl_score.squeeze(1)#移除多余的维度，hl_score 形状变为 [256]。
+        fg_score = torch.stack(max_diff_score)#fg_score (Fine-Grained Score) 代表了每张图上那个“最可疑的Patch”的分数
+        #将其转换为一个张量，形状为 [256]
         # 最终的异常分数 (0到1之间)，维度是 (batch_size,)
-        anomaly_score = (hl_score + fg_score) / 2
-
+        #模型的最终“异常分数”由“整体分数”（考虑了所有证据）和“细粒度分数”（只看最坏的证据）两者平均而来
+        final_score = (hl_score + fg_score) / 2#是一个形状为 [256] 的张量
+        print(f'final_score:{final_score}')
         # --- 新增代码开始 ---
         # 计算正常分数
-        normal_score = 1.0 - anomaly_score
+        # normal_score = 1.0 - anomaly_score
         # print(f'normal_score:{normal_score}')
 
         # 将正常分数和异常分数堆叠成一个二维张量
         # 使用 unsqueeze(1) 将 (batch_size,) 变为 (batch_size, 1) 以便拼接
-        output_scores = torch.stack([normal_score, anomaly_score], dim=1)
+        # output_scores = torch.stack([normal_score, anomaly_score], dim=1)
         # --- 新增代码结束 ---
 
-        img_ref_score = img_ref_score.squeeze(1)
-        # print(f'img_ref_score:{img_ref_score}')
+        img_ref_score = img_ref_score.squeeze(1)#移除多余的维度，img_ref_score 形状变为 [256]。
+        
+        print(f'img_ref_score:{img_ref_score}')
         # print('output_scores shape:', output_scores.shape)
         # 返回新的二维得分张量
-        return output_scores, img_ref_score
+        return final_score, img_ref_score
 
 class CustomTextCLIP(nn.Module):
     output_dict: torch.jit.Final[bool]
